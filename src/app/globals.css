@@ -1,0 +1,263 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-heading);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-deep: var(--ink-deep);
+  --color-brass: var(--brass);
+  --color-brass-deep: var(--brass-deep);
+  --color-parchment: var(--parchment);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /*
+   * The institute's own colours, shared by every surface that wears them: the lapis of a Timurid
+   * manuscript ground, the brass of its illumination, the parchment between them. They are constants,
+   * so the admin panel and the public site agree on what `bg-ink` means.
+   */
+  --ink: oklch(0.35 0.08 255);
+  --ink-deep: oklch(0.26 0.065 257);
+  --brass: oklch(0.75 0.12 82);
+  --brass-deep: oklch(0.52 0.1 72);
+  --parchment: oklch(0.965 0.017 85);
+  --sepia: oklch(0.26 0.016 62);
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.147 0.004 49.3);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.147 0.004 49.3);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.147 0.004 49.3);
+  --primary: oklch(0.214 0.009 43.1);
+  --primary-foreground: oklch(0.986 0.002 67.8);
+  --secondary: oklch(0.96 0.002 17.2);
+  --secondary-foreground: oklch(0.214 0.009 43.1);
+  --muted: oklch(0.96 0.002 17.2);
+  --muted-foreground: oklch(0.547 0.021 43.1);
+  --accent: oklch(0.96 0.002 17.2);
+  --accent-foreground: oklch(0.214 0.009 43.1);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0.005 34.3);
+  --input: oklch(0.922 0.005 34.3);
+  --ring: oklch(0.714 0.014 41.2);
+  --chart-1: oklch(0.868 0.007 39.5);
+  --chart-2: oklch(0.547 0.021 43.1);
+  --chart-3: oklch(0.438 0.017 39.3);
+  --chart-4: oklch(0.367 0.016 35.7);
+  --chart-5: oklch(0.268 0.011 36.5);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.986 0.002 67.8);
+  --sidebar-foreground: oklch(0.147 0.004 49.3);
+  --sidebar-primary: oklch(0.214 0.009 43.1);
+  --sidebar-primary-foreground: oklch(0.986 0.002 67.8);
+  --sidebar-accent: oklch(0.96 0.002 17.2);
+  --sidebar-accent-foreground: oklch(0.214 0.009 43.1);
+  --sidebar-border: oklch(0.922 0.005 34.3);
+  --sidebar-ring: oklch(0.714 0.014 41.2);
+}
+
+/*
+ * The public website wears the institute's colours; the admin panel does not.
+ *
+ * A colleague works in the panel for hours and needs a quiet grey surface, while a visitor should
+ * read the site as the institute's own. Both branches share one stylesheet, so the difference lives
+ * here: the whole public tree is marked with this class and every token below follows it, including
+ * the corners — a printed page has no rounded corners, and a form a person fills in does.
+ */
+.site {
+  --background: oklch(0.994 0.005 88);
+  --foreground: var(--sepia);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--sepia);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--sepia);
+  --primary: var(--ink);
+  --primary-foreground: oklch(0.98 0.01 88);
+  --secondary: var(--parchment);
+  --secondary-foreground: var(--ink-deep);
+  --muted: var(--parchment);
+  --muted-foreground: oklch(0.51 0.02 62);
+  --accent: var(--parchment);
+  --accent-foreground: var(--ink-deep);
+  --border: oklch(0.885 0.018 82);
+  --input: oklch(0.885 0.018 82);
+  --ring: var(--brass-deep);
+  --radius: 0;
+}
+
+.dark {
+  --background: oklch(0.147 0.004 49.3);
+  --foreground: oklch(0.986 0.002 67.8);
+  --card: oklch(0.214 0.009 43.1);
+  --card-foreground: oklch(0.986 0.002 67.8);
+  --popover: oklch(0.214 0.009 43.1);
+  --popover-foreground: oklch(0.986 0.002 67.8);
+  --primary: oklch(0.922 0.005 34.3);
+  --primary-foreground: oklch(0.214 0.009 43.1);
+  --secondary: oklch(0.268 0.011 36.5);
+  --secondary-foreground: oklch(0.986 0.002 67.8);
+  --muted: oklch(0.268 0.011 36.5);
+  --muted-foreground: oklch(0.714 0.014 41.2);
+  --accent: oklch(0.268 0.011 36.5);
+  --accent-foreground: oklch(0.986 0.002 67.8);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.547 0.021 43.1);
+  --chart-1: oklch(0.868 0.007 39.5);
+  --chart-2: oklch(0.547 0.021 43.1);
+  --chart-3: oklch(0.438 0.017 39.3);
+  --chart-4: oklch(0.367 0.016 35.7);
+  --chart-5: oklch(0.268 0.011 36.5);
+  --sidebar: oklch(0.214 0.009 43.1);
+  --sidebar-foreground: oklch(0.986 0.002 67.8);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.986 0.002 67.8);
+  --sidebar-accent: oklch(0.268 0.011 36.5);
+  --sidebar-accent-foreground: oklch(0.986 0.002 67.8);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.547 0.021 43.1);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/*
+ * Rendered rich-text content: the HTML the editor stores on a material. The admin preview and the
+ * public article pages show the same markup, so its typography is defined once, here.
+ */
+@layer components {
+  .content-html {
+    @apply text-[17px] leading-[1.75];
+  }
+  .content-html > :first-child {
+    @apply mt-0;
+  }
+  .content-html h1,
+  .content-html h2,
+  .content-html h3,
+  .content-html h4 {
+    @apply font-heading font-semibold tracking-tight text-foreground;
+  }
+  .content-html h1 {
+    @apply mt-10 mb-4 text-3xl;
+  }
+  /* A rule above a heading marks a new part of a scholarly text more quietly than a larger font. */
+  .content-html h2 {
+    @apply mt-10 mb-4 border-t border-border pt-4 text-[26px] leading-snug;
+  }
+  .content-html h3 {
+    @apply mt-8 mb-3 text-xl;
+  }
+  .content-html h4 {
+    @apply mt-6 mb-2 text-base font-semibold uppercase tracking-[0.08em];
+  }
+  .content-html p {
+    @apply my-4;
+  }
+  .content-html ul {
+    @apply my-4 list-disc pl-6;
+  }
+  .content-html ol {
+    @apply my-4 list-decimal pl-6;
+  }
+  .content-html li {
+    @apply my-1.5 pl-1;
+  }
+  .content-html li::marker {
+    @apply text-brass-deep;
+  }
+  .content-html blockquote {
+    @apply my-6 border-l-2 border-brass pl-5 font-heading text-[19px] italic leading-relaxed text-foreground/85;
+  }
+  .content-html a {
+    @apply text-ink underline decoration-brass decoration-1 underline-offset-[3px] hover:decoration-2;
+  }
+  .content-html strong {
+    @apply font-semibold text-foreground;
+  }
+  .content-html hr {
+    @apply my-8 border-border;
+  }
+  .content-html code {
+    @apply bg-muted px-1 py-0.5 text-[14px];
+  }
+  .content-html pre {
+    @apply my-5 overflow-x-auto bg-muted p-4 text-[13px];
+  }
+  .content-html img {
+    @apply my-2 h-auto max-w-full;
+  }
+  .content-html figure {
+    @apply my-7;
+  }
+  .content-html figcaption {
+    @apply mt-2 border-l-2 border-brass pl-3 text-[13px] leading-snug text-muted-foreground;
+  }
+  .content-html table {
+    @apply my-6 w-full border-collapse text-[15px];
+  }
+  .content-html th,
+  .content-html td {
+    @apply border-b border-border px-3 py-2 text-left align-top;
+  }
+  .content-html th {
+    @apply border-b-2 border-ink bg-parchment font-semibold;
+  }
+  .content-html iframe {
+    @apply my-5 w-full border border-border;
+  }
+}

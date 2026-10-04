@@ -1,0 +1,1138 @@
+// Beruniy Institute CMS — Prisma schema.
+// Deliberately portable to PostgreSQL: no native enums, no scalar lists,
+// no database-level JSON. Enum-ish fields are String validated in src/lib/enums.ts.
+//
+// Content model:
+//   ContentGroup = one material, its type and non-translatable attributes live in <Type>Detail
+//   ContentItem  = one LANGUAGE VERSION of that material (title/slug/body/status/SEO/versions)
+// This gives uniform workflow, translations, versions, trash, search and bulk actions
+// across every content type while keeping type-specific fields in real tables.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─────────────────────────── Authentication & RBAC ───────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String   @unique
+  displayName  String
+  passwordHash String
+  // 'active' | 'invited' | 'suspended'
+  status       String   @default("active")
+  language     String   @default("ru")
+  isAdminUser  Boolean  @default(true)
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+  mustChangePassword Boolean @default(false)
+  lastLoginAt  DateTime?
+  failedLoginCount Int      @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id])
+  sessions     Session[]
+  auditLogs    AuditLog[]
+  revisions    ContentRevision[]
+  media        Media[]    @relation("MediaUploader")
+  authoredItems ContentItem[] @relation("ItemAuthor")
+  updatedItems ContentItem[] @relation("ItemUpdater")
+  groups       ContentGroup[] @relation("GroupCreator")
+  loginAttempts LoginAttempt[]
+  importJobs   ImportJob[]
+  contactMessages ContactMessage[]
+
+  @@index([roleId])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  // 'super_admin' | 'content_manager' | 'scientific_editor' | 'translator' | 'media_manager' | 'viewer'
+  key         String   @unique
+  name        String
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  users       User[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  // e.g. 'content.create', 'content.publish', 'media.manage', 'users.manage', 'settings.manage'
+  key         String  @unique
+  label       String
+  group       String
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip         String?
+  userAgent  String?
+  twoFactorVerified Boolean @default(false)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String
+  success   Boolean
+  reason    String?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@map("login_attempts")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String
+  entityType  String
+  entityId    String?
+  description String
+  payload     String?
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────── Localization ───────────────────────────
+
+model Language {
+  id        String  @id @default(cuid())
+  code      String  @unique
+  name      String
+  nativeName String
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+  urlPrefix String  @unique
+
+  @@map("languages")
+}
+
+// ─────────────────────────── Taxonomy ───────────────────────────
+
+model Category {
+  id       String  @id @default(cuid())
+  // Scopes a category to a content type: 'news' | 'publication' | 'announcement' | 'event' | ...
+  scope    String
+  slug     String
+  parentId String?
+  parent   Category?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[]  @relation("CategoryTree")
+  sortOrder Int      @default(0)
+  isActive Boolean    @default(true)
+  createdAt DateTime @default(now())
+
+  translations CategoryTranslation[]
+  news         News[]
+  announcements Announcement[]
+  events       Event[]
+  publications Publication[]
+  books        Book[]
+  articles     Article[]
+  documents    Document[]
+  partners     Partner[]
+  projects     ResearchProject[]
+  manuscripts  Manuscript[]
+
+  @@unique([scope, slug])
+  @@map("categories")
+}
+
+model CategoryTranslation {
+  id          String  @id @default(cuid())
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  lang        String
+  name        String
+  description String?
+
+  @@unique([categoryId, lang])
+  @@map("category_translations")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  translations TagTranslation[]
+  items        ContentItemTag[]
+
+  @@map("tags")
+}
+
+model TagTranslation {
+  id     String @id @default(cuid())
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  lang   String
+  name   String
+
+  @@unique([tagId, lang])
+  @@map("tag_translations")
+}
+
+// ─────────────────────────── Content core ───────────────────────────
+
+model ContentGroup {
+  id           String   @id @default(cuid())
+  // 'news' | 'article' | 'book' | 'publication' | 'manuscript' | 'dissertation' |
+  // 'event' | 'announcement' | 'page' | 'researcher' | 'department' | 'research_direction' |
+  // 'research_project' | 'partner' | 'document' | 'journal'
+  type         String
+  sourceLang   String
+  isFeatured   Boolean  @default(false)
+  createdBy    String?
+  creator      User?    @relation("GroupCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  items        ContentItem[]
+  mediaLinks   MediaLink[]
+  relatedTo    ContentRelation[] @relation("RelatedTarget")
+  authorships  Authorship[]
+  sectionLinks HomepageSectionItem[]
+  menuLinks    MenuItem[]
+  directionMemberships ResearchDirectionMember[]
+  projectMembers       ResearchProjectMember[]
+  partnerProjects      PartnerProject[]
+
+  news              News?
+  article           Article?
+  journal           Journal?
+  book              Book?
+  publication       Publication?
+  manuscript        Manuscript?
+  dissertation      Dissertation?
+  event             Event?
+  announcement      Announcement?
+  researcher        Researcher?
+  department        Department?
+  researchDirection ResearchDirection?
+  researchProject   ResearchProject?
+  partner           Partner?
+  page              Page?
+  document          Document?
+
+  @@index([type, deletedAt])
+  @@map("content_groups")
+}
+
+model ContentItem {
+  id              String   @id @default(cuid())
+  groupId         String
+  group           ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  lang            String
+  title           String
+  subtitle        String?
+  slug            String
+  excerpt         String?
+  /** Sanitized HTML produced by the rich-text editor. The only body column: the public site
+   *  renders this and the search index strips its tags, so there is nothing to keep in sync. */
+  body            String?
+  status          String   @default("draft")
+  // 'draft' | 'in_review' | 'approved' | 'scheduled' | 'published' | 'archived'
+  revision        Int      @default(1)
+  authorId        String?
+  author          User?    @relation("ItemAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  updatedById     String?
+  updatedBy       User?    @relation("ItemUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  publishedAt     DateTime?
+  scheduledAt     DateTime?
+  submittedForReviewAt DateTime?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectReason    String?
+  archivedAt      DateTime?
+  deletedAt       DateTime?
+  seoTitle        String?
+  seoDescription  String?
+  keywords        String?
+  canonicalUrl    String?
+  ogTitle         String?
+  ogDescription   String?
+  ogImageAssetId  String?
+  noIndex         Boolean  @default(false)
+  translationNote String?
+  // 'source' when this is the original language version, else 'translation'
+  origin          String   @default("source")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tags      ContentItemTag[]
+  revisions ContentRevision[]
+  relations ContentRelation[] @relation("RelationItem")
+
+  @@unique([lang, slug])
+  @@index([groupId, lang])
+  @@index([status, publishedAt])
+  @@index([lang, status])
+  @@map("content_items")
+}
+
+model ContentItemTag {
+  itemId String
+  tagId  String
+  item   ContentItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag    Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, tagId])
+  @@map("content_item_tags")
+}
+
+model ContentRelation {
+  id            String   @id @default(cuid())
+  itemId        String
+  item          ContentItem @relation("RelationItem", fields: [itemId], references: [id], onDelete: Cascade)
+  targetGroupId String
+  targetGroup   ContentGroup @relation("RelatedTarget", fields: [targetGroupId], references: [id], onDelete: Cascade)
+  reason        String   @default("related")
+  sortOrder     Int      @default(0)
+
+  @@unique([itemId, targetGroupId, reason])
+  @@map("content_relations")
+}
+
+model Authorship {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  researcherId String?
+  fullName  String?
+  role      String   @default("author")
+  sortOrder Int      @default(0)
+
+  @@index([groupId])
+  @@map("authorships")
+}
+
+model ContentRevision {
+  id            String   @id @default(cuid())
+  itemId        String
+  item          ContentItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  version       Int
+  title         String
+  subtitle      String?
+  slug          String
+  excerpt       String?
+  body          String?
+  status        String
+  changeSummary String?
+  changedById   String?
+  changedBy     User?    @relation(fields: [changedById], references: [id], onDelete: SetNull)
+  restoredFrom  Int?
+  createdAt     DateTime @default(now())
+
+  @@unique([itemId, version])
+  @@index([itemId])
+  @@map("content_revisions")
+}
+
+// ─────────────────────────── Type-specific details ───────────────────────────
+
+model News {
+  id         String  @id @default(cuid())
+  groupId    String  @unique
+  group      ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  eventDate  DateTime?
+  sourceUrl  String?
+
+  @@map("news")
+}
+
+model Article {
+  id         String  @id @default(cuid())
+  groupId    String  @unique
+  group      ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  journalId  String?
+  journal    Journal? @relation(fields: [journalId], references: [id], onDelete: SetNull)
+  doi        String?
+  references String?
+
+  @@map("articles")
+}
+
+model Journal {
+  id        String   @id @default(cuid())
+  groupId   String?  @unique
+  group     ContentGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  issn      String?
+  eissn     String?
+  website   String?
+  foundedYear Int?
+
+  articles  Article[]
+  publications Publication[]
+
+  @@map("journals")
+}
+
+model Book {
+  id         String  @id @default(cuid())
+  groupId    String  @unique
+  group      ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  isbn       String?
+  publisher  String?
+  place      String?
+  year       Int?
+  pages      Int?
+  volume     String?
+  edition    String?
+
+  @@map("books")
+}
+
+model Publication {
+  id         String  @id @default(cuid())
+  groupId    String  @unique
+  group      ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  journalId  String?
+  journal    Journal? @relation(fields: [journalId], references: [id], onDelete: SetNull)
+  // 'book' | 'article' | 'journal' | 'proceedings' | 'dissertation' | 'report' | 'other'
+  kind       String   @default("article")
+  isbn       String?
+  doi        String?
+  publisher  String?
+  year       Int?
+  pages      String?
+  volume     String?
+  issue      String?
+
+  @@map("publications")
+}
+
+model Manuscript {
+  id            String  @id @default(cuid())
+  groupId       String  @unique
+  group         ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  repositoryId  String?
+  invNo         String?
+  authorOriginal String?
+  titleOriginal String?
+  languageOfText String?
+  script         String?
+  subject        String?
+  periodLabel    String?
+  dateHijri      String?
+  dateGregorian  String?
+  folios         String?
+  dimensions     String?
+  material       String?
+  colophon       String?
+  incipit        String?
+  explicit       String?
+  bibliographicInfo String?
+  digitalCopyNote   String?
+  hasDigitalCopy    Boolean @default(false)
+  century          Int?
+
+  @@index([subject])
+  @@index([languageOfText])
+  @@map("manuscripts")
+}
+
+model Dissertation {
+  id           String  @id @default(cuid())
+  groupId      String  @unique
+  group        ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  // 'phd' | 'dsc'
+  degree       String   @default("phd")
+  specialtyCode String?
+  specialty    String?
+  candidateName String?
+  candidateId  String?
+  supervisor   String?
+  organization String?
+  defenseDate  DateTime?
+  defenseTime  String?
+  defensePlace String?
+  councilCode  String?
+  // 'announced' | 'defended' | 'awarded' | 'withdrawn'
+  stage        String   @default("announced")
+  abstract     String?
+
+  documents DissertationDocument[]
+
+  @@map("dissertations")
+}
+
+model DissertationDocument {
+  id             String  @id @default(cuid())
+  dissertationId String
+  dissertation   Dissertation @relation(fields: [dissertationId], references: [id], onDelete: Cascade)
+  assetId        String
+  label          String?
+  // 'abstract' | 'author_abstract' | 'full_text' | 'protocol' | 'review' | 'attachment'
+  kind           String  @default("attachment")
+  sortOrder      Int     @default(0)
+
+  @@map("dissertation_documents")
+}
+
+model Event {
+  id           String  @id @default(cuid())
+  groupId      String  @unique
+  group        ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  // 'conference' | 'seminar' | 'workshop' | 'scientific_meeting' | 'summer_school' |
+  // 'public_lecture' | 'international'
+  kind         String   @default("conference")
+  startDate    DateTime?
+  endDate      DateTime?
+  startTime    String?
+  endTime      String?
+  location     String?
+  venue        String?
+  organizers   String?
+  registrationUrl String?
+  contactPerson String?
+  contactEmail  String?
+  contactPhone  String?
+  isOnline     Boolean  @default(false)
+  isInternational Boolean @default(false)
+  program      String?
+
+  speakers EventSpeaker[]
+
+  @@index([startDate])
+  @@map("events")
+}
+
+model EventSpeaker {
+  id        String  @id @default(cuid())
+  eventId   String
+  event     Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  researcherId String?
+  fullName  String?
+  affiliation String?
+  topic     String?
+  sortOrder Int     @default(0)
+
+  @@map("event_speakers")
+}
+
+model Announcement {
+  id           String  @id @default(cuid())
+  groupId      String  @unique
+  group        ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  // 'scientific' | 'dissertation' | 'vacancy' | 'procurement' | 'event' | 'official'
+  kind         String   @default("official")
+  expiresAt    DateTime?
+  contactPerson String?
+  contactEmail  String?
+  contactPhone  String?
+  isPinned     Boolean  @default(false)
+
+  @@index([expiresAt])
+  @@map("announcements")
+}
+
+model Researcher {
+  id           String  @id @default(cuid())
+  groupId      String  @unique
+  group        ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId       String?
+  photoAssetId String?
+  position     String?
+  // 'director' | 'deputy_director' | 'scientific_secretary' | 'department_head' |
+  // 'senior_researcher' | 'researcher' | 'junior_researcher' | 'doctoral_student' | 'phd_researcher' | 'young_scholar'
+  leadershipRole String?
+  degree       String?
+  degreeFull   String?
+  academicTitle String?
+  specialty    String?
+  interests    String?
+  email        String?
+  phone        String?
+  orcid        String?
+  website      String?
+  links        String?
+  birthYear    Int?
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  isStaff      Boolean @default(true)
+  isYoungScientist Boolean @default(false)
+  sortOrder    Int     @default(0)
+
+  @@index([leadershipRole])
+  @@index([departmentId])
+  @@map("researchers")
+}
+
+model Department {
+  id        String  @id @default(cuid())
+  groupId   String  @unique
+  group     ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  // 'department' | 'center' | 'group' | 'council' | 'division' | 'laboratory'
+  kind      String   @default("department")
+  parentId  String?
+  parent    Department? @relation("DeptTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Department[] @relation("DeptTree")
+  headResearcherId String?
+  phone     String?
+  email     String?
+  room      String?
+  sortOrder Int      @default(0)
+
+  researchers Researcher[]
+
+  @@map("departments")
+}
+
+model ResearchDirection {
+  id              String  @id @default(cuid())
+  groupId         String  @unique
+  group           ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  leadResearcherId String?
+  code            String?
+  sortOrder       Int     @default(0)
+
+  members ResearchDirectionMember[]
+  projects ResearchProject[]
+
+  @@map("research_directions")
+}
+
+model ResearchDirectionMember {
+  id            String  @id @default(cuid())
+  directionId   String
+  direction     ResearchDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  researcherGroupId String
+  researcherGroup ContentGroup @relation(fields: [researcherGroupId], references: [id], onDelete: Cascade)
+  role          String  @default("member")
+
+  @@unique([directionId, researcherGroupId])
+  @@map("research_direction_members")
+}
+
+model ResearchProject {
+  id            String  @id @default(cuid())
+  groupId       String  @unique
+  group         ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  directionId   String?
+  direction     ResearchDirection? @relation(fields: [directionId], references: [id], onDelete: SetNull)
+  code          String?
+  fundingSource String?
+  budget        String?
+  startYear     Int?
+  endYear       Int?
+  // 'planned' | 'active' | 'completed' | 'cancelled'
+  stage         String   @default("active")
+  leadResearcherId String?
+
+  members ResearchProjectMember[]
+  partners PartnerProject[]
+
+  @@map("research_projects")
+}
+
+model ResearchProjectMember {
+  id              String  @id @default(cuid())
+  projectId       String
+  project         ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  researcherGroupId String
+  researcherGroup ContentGroup @relation(fields: [researcherGroupId], references: [id], onDelete: Cascade)
+  role            String  @default("member")
+
+  @@unique([projectId, researcherGroupId])
+  @@map("research_project_members")
+}
+
+model Partner {
+  id         String  @id @default(cuid())
+  groupId    String  @unique
+  group      ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  organization String?
+  country    String?
+  // 'university' | 'research_institute' | 'museum' | 'archive' | 'ngo' | 'government'
+  orgType    String   @default("research_institute")
+  website    String?
+  logoAssetId String?
+  agreementNumber String?
+  signedAt   DateTime?
+  validFrom  DateTime?
+  validTo    DateTime?
+  isActive   Boolean  @default(true)
+
+  projects PartnerProject[]
+
+  @@index([country])
+  @@map("partners")
+}
+
+model PartnerProject {
+  id              String  @id @default(cuid())
+  partnerId       String
+  partner         Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  projectId       String
+  project         ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  researcherGroupId String?
+  researcherGroup ContentGroup? @relation(fields: [researcherGroupId], references: [id], onDelete: SetNull)
+
+  @@unique([partnerId, projectId])
+  @@map("partner_projects")
+}
+
+model Page {
+  id        String  @id @default(cuid())
+  groupId   String  @unique
+  group     ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  // 'standard' | 'landing' | 'full_width' | 'sidebar'
+  template  String  @default("standard")
+  showInBreadcrumbs Boolean @default(true)
+  sortOrder Int     @default(0)
+  // Optional fixed URL path override (else derived from type + slug)
+  pathOverride String?
+
+  @@map("pages")
+}
+
+model Document {
+  id         String  @id @default(cuid())
+  groupId    String  @unique
+  group      ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  // 'official' | 'report' | 'regulation' | 'order' | 'conference_program' | 'other'
+  kind       String   @default("official")
+  docNumber  String?
+  issuedAt   DateTime?
+  assetId    String?
+
+  @@map("documents")
+}
+
+// ─────────────────────────── Media library ───────────────────────────
+
+model MediaFolder {
+  id        String  @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    MediaFolder? @relation("FolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  MediaFolder[] @relation("FolderTree")
+  createdAt DateTime @default(now())
+
+  assets Media[]
+
+  @@unique([parentId, name])
+  @@map("media_folders")
+}
+
+model Media {
+  id           String   @id @default(cuid())
+  folderId     String?
+  folder       MediaFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  filename     String
+  originalName String
+  // 'image' | 'document' | 'video' | 'audio' | 'other'
+  kind         String
+  mimeType     String
+  extension    String
+  sizeBytes    Int
+  width        Int?
+  height       Int?
+  durationSec  Int?
+  pageCount    Int?
+  altText      String?
+  title        String?
+  caption      String?
+  description  String?
+  storagePath  String   @unique
+  publicUrl    String   @unique
+  checksum     String?
+  // 'processing' | 'ready' | 'failed'
+  status       String   @default("processing")
+  error        String?
+  // YouTube/Vimeo embeds keep an external URL and no file
+  externalUrl  String?
+  uploadedById String?
+  uploadedBy   User?    @relation("MediaUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  replacedCount Int     @default(0)
+  lastReplacedAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  variants MediaVariant[]
+  links    MediaLink[]
+
+  @@index([kind, status])
+  @@index([folderId])
+  @@index([createdAt])
+  @@map("media")
+}
+
+model MediaVariant {
+  id       String @id @default(cuid())
+  mediaId  String
+  media    Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  // 'original' | 'thumb' | 'small' | 'medium' | 'large' | 'webp' | 'avif'
+  role     String
+  storagePath String @unique
+  publicUrl    String @unique
+  mimeType String
+  sizeBytes Int
+  width    Int?
+  height   Int?
+
+  @@unique([mediaId, role, width])
+  @@map("media_variants")
+}
+
+model MediaLink {
+  id        String  @id @default(cuid())
+  groupId   String
+  group     ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  mediaId   String
+  media     Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  // 'main' | 'gallery' | 'attachment' | 'og' | 'logo' | 'cover'
+  role      String   @default("gallery")
+  lang      String?
+  caption   String?
+  sortOrder Int      @default(0)
+
+  @@index([groupId, role])
+  @@map("media_links")
+}
+
+// ─────────────────────────── Menus & homepage ───────────────────────────
+
+model Menu {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  location  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items MenuItem[]
+
+  @@map("menus")
+}
+
+model MenuItem {
+  id        String   @id @default(cuid())
+  menuId    String
+  menu      Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    MenuItem? @relation("MenuTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  MenuItem[] @relation("MenuTree")
+  // 'page' | 'content' | 'external' | 'section'
+  targetType String   @default("page")
+  targetUrl  String?
+  contentGroupId String?
+  contentGroup ContentGroup? @relation(fields: [contentGroupId], references: [id], onDelete: SetNull)
+  sortOrder  Int      @default(0)
+  isVisible  Boolean  @default(true)
+  openInNewTab Boolean @default(false)
+  isMegaMenu Boolean  @default(false)
+  // Column layout / curated groups for mega menus, stored as JSON text
+  megaConfig String?
+  cssClass   String?
+  icon       String?
+
+  translations MenuItemTranslation[]
+
+  @@index([menuId, parentId, sortOrder])
+  @@map("menu_items")
+}
+
+model MenuItemTranslation {
+  id     String  @id @default(cuid())
+  itemId String
+  item   MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lang   String
+  title  String
+  label  String?
+
+  @@unique([itemId, lang])
+  @@map("menu_item_translations")
+}
+
+model HomepageSection {
+  id        String   @id @default(cuid())
+  // 'hero' | 'about' | 'latest_news' | 'research' | 'manuscripts' | 'publications' |
+  // 'international' | 'events' | 'young_scientists' | 'media' | 'useful_links' | 'contact' | 'announcements' | 'dissertations'
+  type      String
+  isEnabled Boolean  @default(true)
+  sortOrder Int      @default(0)
+  // Static layout/behaviour options as JSON text
+  config    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contents HomepageSectionContent[]
+  items    HomepageSectionItem[]
+
+  @@index([sortOrder])
+  @@map("homepage_sections")
+}
+
+model HomepageSectionContent {
+  id        String  @id @default(cuid())
+  sectionId String
+  section   HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  lang      String
+  heading   String?
+  subheading String?
+  body      String?
+  buttonText String?
+  buttonUrl  String?
+  button2Text String?
+  button2Url  String?
+
+  @@unique([sectionId, lang])
+  @@map("homepage_section_contents")
+}
+
+model HomepageSectionItem {
+  id        String  @id @default(cuid())
+  sectionId String
+  section   HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  groupId   String
+  group     ContentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sortOrder Int     @default(0)
+
+  @@unique([sectionId, groupId])
+  @@map("homepage_section_items")
+}
+
+// ─────────────────────────── SEO & site plumbing ───────────────────────────
+
+model RouteSeo {
+  id          String  @id @default(cuid())
+  lang        String
+  routePath   String
+  title       String?
+  description String?
+  keywords    String?
+  canonicalUrl String?
+  ogTitle     String?
+  ogDescription String?
+  ogImageAssetId String?
+  noIndex     Boolean   @default(false)
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([lang, routePath])
+  @@map("route_seo")
+}
+
+model Redirect {
+  id          String   @id @default(cuid())
+  sourcePath  String   @unique
+  targetPath  String
+  // 'permanent' (301) | 'temporary' (302)
+  redirectType String   @default("permanent")
+  hits        Int        @default(0)
+  // 'manual' | 'slug_change' | 'migration'
+  origin      String     @default("manual")
+  isActive    Boolean    @default(true)
+  note        String?
+  createdAt   DateTime   @default(now())
+
+  @@index([targetPath])
+  @@map("redirects")
+}
+
+model Setting {
+  id        String  @id @default(cuid())
+  // 'general' | 'languages' | 'seo' | 'social' | 'contact' | 'email' | 'security' |
+  // 'media' | 'menus' | 'homepage' | 'analytics' | 'footer' | 'header'
+  group     String
+  key       String
+  value     String
+  // 'string' | 'text' | 'number' | 'boolean' | 'json' | 'color' | 'url' | 'image'
+  valueType String   @default("string")
+  label     String?
+  hint      String?
+  sortOrder Int      @default(0)
+  isPublic  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  translations SettingTranslation[]
+
+  @@unique([group, key])
+  @@map("settings")
+}
+
+model SettingTranslation {
+  id       String  @id @default(cuid())
+  settingId String
+  setting  Setting @relation(fields: [settingId], references: [id], onDelete: Cascade)
+  lang     String
+  value    String
+
+  @@unique([settingId, lang])
+  @@map("setting_translations")
+}
+
+// ─────────────────────────── Link checker, imports, contact ───────────────────────────
+
+model LinkCheckRun {
+  id          String   @id @default(cuid())
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  checkedCount Int     @default(0)
+  brokenCount  Int     @default(0)
+  triggeredBy String?
+  status      String   @default("running")
+
+  results LinkCheck[]
+
+  @@map("link_check_runs")
+}
+
+model LinkCheck {
+  id         String  @id @default(cuid())
+  runId      String
+  run        LinkCheckRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  url        String
+  // 'ok' | 'broken' | 'redirect' | 'timeout' | 'skipped'
+  status     String
+  statusCode Int?
+  pagePath   String?
+  pageGroupId String?
+  errorMessage String?
+  lastCheckedAt DateTime @default(now())
+
+  @@index([status])
+  @@index([url])
+  @@map("link_checks")
+}
+
+model ImportJob {
+  id            String   @id @default(cuid())
+  contentType   String
+  filename      String
+  status        String   @default("pending")
+  // 'pending' | 'validated' | 'importing' | 'done' | 'failed' | 'cancelled'
+  totalRows     Int      @default(0)
+  validRows     Int      @default(0)
+  errorRows     Int      @default(0)
+  duplicateRows Int      @default(0)
+  importedRows  Int      @default(0)
+  report        String?
+  confirmedAt   DateTime?
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  rows ImportJobRow[]
+
+  @@map("import_jobs")
+}
+
+model ImportJobRow {
+  id        String  @id @default(cuid())
+  jobId     String
+  job       ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  rowNumber Int
+  // 'valid' | 'error' | 'duplicate' | 'imported' | 'skipped'
+  status    String
+  message   String?
+  payload   String
+
+  @@index([jobId, status])
+  @@map("import_job_rows")
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String?
+  message   String
+  lang      String   @default("ru")
+  // 'new' | 'read' | 'replied' | 'archived'
+  stage     String   @default("new")
+  ip        String?
+  handledById String?
+  handledBy User?    @relation(fields: [handledById], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stage, createdAt])
+  @@map("contact_messages")
+}
+
+model ScheduledPublishLog {
+  id        String   @id @default(cuid())
+  itemId    String
+  status    String
+  message   String?
+  ranAt     DateTime @default(now())
+
+  @@index([itemId])
+  @@map("scheduled_publish_logs")
+}

@@ -1,0 +1,157 @@
+/* Standalone stylesheet: Tailwind v4 only resolves @apply against a scanned source, so the
+   main stylesheet has to be referenced explicitly here. */
+@reference "../../../app/globals.css";
+
+.tiptap-editor {
+  @apply relative rounded-md border border-input bg-transparent transition focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20;
+}
+
+.tiptap-editor .tiptap {
+  @apply px-3.5 py-3 text-sm leading-relaxed outline-none min-h-[22rem] max-w-none;
+}
+
+.tiptap-editor .tiptap :first-child {
+  @apply mt-0;
+}
+.tiptap-editor .tiptap :last-child {
+  @apply mb-0;
+}
+
+.tiptap-editor .tiptap h1 {
+  @apply mt-6 mb-2 text-2xl font-semibold tracking-tight;
+}
+.tiptap-editor .tiptap h2 {
+  @apply mt-5 mb-2 text-xl font-semibold tracking-tight;
+}
+.tiptap-editor .tiptap h3 {
+  @apply mt-4 mb-2 text-base font-semibold;
+}
+.tiptap-editor .tiptap h4 {
+  @apply mt-4 mb-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground;
+}
+.tiptap-editor .tiptap p {
+  @apply my-2.5;
+}
+.tiptap-editor .tiptap ul {
+  @apply my-2.5 list-disc pl-6;
+}
+.tiptap-editor .tiptap ol {
+  @apply my-2.5 list-decimal pl-6;
+}
+.tiptap-editor .tiptap li {
+  @apply my-1;
+}
+.tiptap-editor .tiptap blockquote {
+  @apply my-3 border-l-2 pl-4 text-muted-foreground;
+}
+.tiptap-editor .tiptap code {
+  @apply rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em];
+}
+.tiptap-editor .tiptap pre {
+  @apply my-3 overflow-x-auto rounded-md bg-muted p-3;
+}
+.tiptap-editor .tiptap pre code {
+  @apply bg-transparent p-0;
+}
+.tiptap-editor .tiptap hr {
+  @apply my-5 border-t;
+}
+.tiptap-editor .tiptap a {
+  @apply underline underline-offset-2;
+}
+.tiptap-editor .tiptap img {
+  @apply max-w-full rounded;
+  height: auto;
+}
+.tiptap-editor .tiptap .align-left { text-align: left; }
+.tiptap-editor .tiptap .align-center { text-align: center; }
+.tiptap-editor .tiptap .align-right { text-align: right; }
+.tiptap-editor .tiptap .align-justify { text-align: justify; }
+
+.tiptap-editor .tiptap table {
+  @apply my-3 w-full table-fixed border-collapse;
+}
+.tiptap-editor .tiptap th,
+.tiptap-editor .tiptap td {
+  @apply relative border p-2 align-top text-sm;
+}
+.tiptap-editor .tiptap th {
+  @apply bg-muted font-medium;
+}
+.tiptap-editor .tiptap .selectedCell::after {
+  content: '';
+  @apply absolute inset-0 bg-primary/10 pointer-events-none;
+}
+
+/* Figure block inserted from the Media Library. */
+.tiptap-figure-shell {
+  @apply my-3;
+}
+.tiptap-figure-shell figure {
+  @apply m-0;
+}
+.tiptap-figure-shell figure img {
+  @apply inline-block max-w-full;
+}
+.tiptap-figure-shell figcaption {
+  @apply mt-1.5 text-center;
+}
+.tiptap-figure-shell figcaption input {
+  @apply w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-center text-xs text-muted-foreground outline-none;
+}
+.tiptap-figure-shell figcaption input:focus {
+  @apply border-input bg-background;
+}
+.tiptap-figure-empty {
+  @apply flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed py-8 text-xs text-muted-foreground;
+}
+.tiptap-figure-shell[data-selected='true'] figure img {
+  @apply ring-2 ring-ring/50;
+}
+.tiptap-figure-toolbar {
+  @apply mt-1.5 flex items-center gap-1 text-xs;
+}
+.tiptap-figure-toolbar button {
+  @apply inline-flex size-7 items-center justify-center rounded border border-input bg-transparent hover:bg-muted;
+}
+.tiptap-figure-toolbar .tiptap-figure-remove {
+  @apply text-destructive;
+}
+
+.tiptap-editor .tiptap div[data-youtube-video] {
+  @apply my-3 overflow-hidden;
+}
+.tiptap-editor .tiptap div[data-youtube-video] iframe {
+  @apply w-full;
+  aspect-ratio: 16 / 9;
+  height: auto;
+}
+
+.tiptap-editor .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  @apply pointer-events-none float-left h-0 text-muted-foreground;
+}
+
+.tiptap-editor .tiptap [data-placeholder]:first-child::before {
+  content: attr(data-placeholder);
+  @apply pointer-events-none float-left h-0 text-muted-foreground;
+}
+
+.tiptap-toolbar {
+  @apply flex flex-wrap items-center gap-0.5 border-b bg-muted/40 p-1.5;
+}
+.tiptap-toolbar-group {
+  @apply flex items-center gap-0.5;
+}
+.tiptap-toolbar-sep {
+  @apply mx-1 h-5 w-px bg-border;
+}
+.tiptap-toolbar-button {
+  @apply inline-flex size-7 items-center justify-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-40;
+}
+.tiptap-toolbar-button[data-active='true'] {
+  @apply bg-primary/10 text-primary;
+}
+.tiptap-status {
+  @apply flex items-center justify-end gap-3 border-t px-3 py-1.5 text-[11px] text-muted-foreground tabular-nums;
+}
