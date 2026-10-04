@@ -1,7 +1,8 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { SITE_LOCALE_COOKIE, SITE_LOCALE_COOKIE_MAX_AGE } from '@/lib/site/cookie';
 import { acceptedLanguages } from '@/lib/site/public-locale';
 import { defaultSiteLanguage, negotiateLanguage, siteLanguages } from '@/lib/site/languages';
+import { redirectTo } from '@/lib/http/redirect-to';
 
 /**
  * The address a visitor types when they type nothing: `/`.
@@ -19,10 +20,7 @@ export async function GET(request: NextRequest) {
   const remembered = request.cookies.get(SITE_LOCALE_COOKIE)?.value ?? '';
   const code = negotiateLanguage(languages, [remembered, ...acceptedLanguages(request.headers.get('accept-language'))], fallback);
 
-  const url = new URL(`/${code}`, request.url);
-  url.search = request.nextUrl.search;
-
-  const response = NextResponse.redirect(url, 307);
+  const response = redirectTo(`/${code}${request.nextUrl.search}`);
   response.cookies.set(SITE_LOCALE_COOKIE, code, {
     path: '/',
     maxAge: SITE_LOCALE_COOKIE_MAX_AGE,

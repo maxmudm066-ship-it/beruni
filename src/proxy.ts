@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SITE_LOCALE_COOKIE, SITE_LOCALE_COOKIE_MAX_AGE } from '@/lib/site/cookie';
 import { negotiateUnprefixed, unprefixedPathname } from '@/lib/site/public-locale';
+import { requestOrigin } from '@/lib/http/request-origin';
 
 const SESSION_COOKIE = 'beruni_admin_session';
 
@@ -22,9 +23,8 @@ function guardAdmin(request: NextRequest, pathname: string, search: string) {
   if (isPublicAdminPath(pathname)) return NextResponse.next();
 
   if (!request.cookies.has(SESSION_COOKIE)) {
-    const url = new URL('/admin/login', request.url);
-    if (pathname !== '/admin') url.searchParams.set('next', pathname + search);
-    return NextResponse.redirect(url);
+    const next = pathname === '/admin' ? '' : `?next=${encodeURIComponent(pathname + search)}`;
+    return NextResponse.redirect(new URL(`/admin/login${next}`, requestOrigin(request)));
   }
 
   return NextResponse.next();
@@ -55,10 +55,7 @@ export function proxy(request: NextRequest) {
 
   const code = negotiateUnprefixed(request.cookies.get(SITE_LOCALE_COOKIE)?.value ?? '', request.headers.get('accept-language'));
 
-  const url = new URL(request.url);
-  url.pathname = `/${code}${rest}`;
-
-  const response = NextResponse.redirect(url, 307);
+  const response = NextResponse.redirect(new URL(`/${code}${rest}${search}`, requestOrigin(request)), 307);
   response.cookies.set(SITE_LOCALE_COOKIE, code, {
     path: '/',
     maxAge: SITE_LOCALE_COOKIE_MAX_AGE,

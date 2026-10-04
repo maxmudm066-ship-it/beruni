@@ -3,6 +3,7 @@ import { assertPermission } from '@/lib/auth/session';
 import { getAdminLocale, localeOf, type AdminLocale } from '@/lib/admin/i18n';
 import { CONTENT_TYPE_MAP } from '@/lib/content-types';
 import { buildExportFile, type ExportSubset } from '@/lib/admin/import-export';
+import { redirectTo } from '@/lib/http/redirect-to';
 
 const SUBSETS: Record<string, ExportSubset> = {
   published: 'published',
@@ -16,13 +17,13 @@ const SUBSETS: Record<string, ExportSubset> = {
  */
 export async function GET(request: Request) {
   const guard = await assertPermission('importexport.manage');
-  if (!guard.ok) return NextResponse.redirect(new URL('/admin/no-access', request.url));
+  if (!guard.ok) return redirectTo('/admin/no-access');
 
   const params = new URL(request.url).searchParams;
   const typeKey = (params.get('type') ?? '').trim().slice(0, 40);
   const known = CONTENT_TYPE_MAP.has(typeKey);
   if (!known) {
-    return NextResponse.redirect(new URL('/admin/import-export?bad=badType', request.url));
+    return redirectTo('/admin/import-export?bad=badType');
   }
 
   const locale: AdminLocale = await getAdminLocale(localeOf(guard.user.language));
@@ -32,10 +33,8 @@ export async function GET(request: Request) {
 
   const file = await buildExportFile({ typeKey, lang, subset, locale, headersOnly });
   if ('reason' in file) {
-    const url = new URL('/admin/import-export', request.url);
-    url.searchParams.set('bad', file.reason);
-    url.searchParams.set('type', typeKey);
-    return NextResponse.redirect(url);
+    const query = new URLSearchParams({ bad: file.reason, type: typeKey });
+    return redirectTo(`/admin/import-export?${query.toString()}`);
   }
 
   return new NextResponse(file.content, {
